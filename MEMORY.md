@@ -55,11 +55,18 @@ Token `sbp_fcd2...` sees 0 orgs, cannot create projects. Account at 2-project li
 **Applied to Neon so far (verified live):**
 
 - Probe table `public.api_probe` — created during testing, **dropped**.
-- **Migration 001 complete**: extensions `pgcrypto`, `pg_trgm`; enums `app_role`,
+- **001 DONE**: extensions `pgcrypto`, `pg_trgm`; enums `app_role`,
   `priority_level`, `record_status`, `shift_status`, `notification_type`,
   `activity_action`; functions `set_updated_at()`, `log_activity()`.
-- **Migration 002 (profiles portion) complete**: table `public.profiles`, 3 indexes,
-  trigger `profiles_set_updated_at`, trigger `on_neon_auth_user_created`.
+- **002 DONE**: `profiles`, `pipeline_stages`, `channels`, `programs`,
+  `promo_goals`, `promo_types`, `projects`, `project_members`, `project_programs`.
+- **003 DONE**: `promo_requests`, `request_participants`, `request_shifts`,
+  `request_notes`, `attachments`, `activity_logs`, `notifications`.
+
+**Verified current state: 16 tables, 69 indexes, 10 triggers.** Confirmed table list:
+activity_logs, attachments, channels, notifications, pipeline_stages, profiles,
+programs, project_members, project_programs, projects, promo_goals,
+promo_requests, promo_types, request_notes, request_participants, request_shifts.
 
 **The two patches Neon required in 002:**
 
@@ -73,14 +80,24 @@ Token `sbp_fcd2...` sees 0 orgs, cannot create projects. Account at 2-project li
    coalesce(new.name, split_part(new.email, '@', 1))
    ```
 
-**Next: migration 002 remainder** — reference tables (`pipeline_stages`, `channels`,
-`programs`, `promo_goals`, `promo_types`) plus `projects`, `project_members`,
-`project_programs`. These are plain tables and should apply unchanged; read
-`supabase/migrations/20260101000002_core_tables.sql` from line 70 onward.
+001, 002 and 003 applied with NO other changes — everything else was portable as
+written. 004 has 3 `auth.uid()` references, which work unchanged since Neon
+provides a real `auth.uid()`.
 
-Then 003, 004, 005, 006, 007 as written. **Skip 008 entirely** — it creates
-`storage.buckets` / `storage.objects`, which do not exist in Neon; attachments move
-to Neon Object Storage (S3) instead.
+**Remaining — in order:**
+
+1. **004** functions & triggers (apply as-is) — read
+   `supabase/migrations/20260101000004_functions_and_triggers.sql`
+2. **005** RLS policies (apply as-is — `auth.uid()`, `is_admin()`, `can_manage()`
+   are all available; confirm those helper functions come from 004)
+3. **006** reference-data seed (apply as-is)
+4. **007** settings table + admin helpers (apply as-is)
+5. **Skip 008 entirely** — it creates `storage.buckets` / `storage.objects`, which
+   do not exist in Neon. Attachments move to Neon Object Storage (S3) instead;
+   `public.attachments` already exists and just stores `storage_path`.
+6. Then the app-side work: swap client to `@neondatabase/neon-js`, fix
+   `changePasswordAction` (updateUser rejects password), resolve the
+   `@supabase/ssr` question, move uploads to S3, repoint Vercel, redeploy.
 
 ## Neon migration — research COMPLETE
 
