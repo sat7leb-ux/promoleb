@@ -36,4 +36,7 @@ yarn-error.log*
 # generated supabase types
 src/types/database.generated.ts
 .vercel
+
+# every .env file except the documented template
 .env*
+!.env.example
