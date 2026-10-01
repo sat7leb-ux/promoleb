@@ -17,29 +17,25 @@ Ordered steps to stand up the database. Budget about 15 minutes.
 
 ## 2. Find your credentials
 
-**Project URL and anon key** — dashboard → **Project Settings → API**. Copy:
+Project ref for this deployment: **`nexbyquzytajhmklapjs`**
+
+The URL, anon key, service role key, site URL and cron secret are **already
+configured on the Vercel `promoleb` project** -- you do not need to set any of
+them for the deployment to work.
+
+To run locally instead, copy these into `.env.local` from dashboard ->
+**Project Settings -> API**:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<the anon / publishable key>
-```
-
-**Service role key** — same page, further down, under **Service Role**. In newer
-dashboards it may be labelled *Secret key*. This key **bypasses RLS**: it can
-read and write every row regardless of policy. It is a server-only secret.
-
-```bash
-# .env.local — never commit this file
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
+NEXT_PUBLIC_SUPABASE_URL=https://nexbyquzytajhmklapjs.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 CRON_SECRET=<any long random string>
 ```
 
-> If your key starts with `sb_secret_` rather than `sb_publishable_`, that is
-> the new key format. Use it as-is — the app passes it through the standard SDK
-> header, which still works.
+`SUPABASE_SERVICE_ROLE_KEY` bypasses RLS entirely. It is a server-only secret:
+never give it a `NEXT_PUBLIC_` prefix, and never commit it.
 
 ---
 
