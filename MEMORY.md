@@ -50,7 +50,39 @@ Token `sbp_fcd2...` sees 0 orgs, cannot create projects. Account at 2-project li
   An earlier assumption that they would was wrong.
 - `.env.local` holds 10 Neon vars, verified git-ignored
 
-## Neon migration — research COMPLETE, implementation NOT started
+## Neon migration — IN PROGRESS (do not restart from scratch)
+
+**Applied to Neon so far (verified live):**
+
+- Probe table `public.api_probe` — created during testing, **dropped**.
+- **Migration 001 complete**: extensions `pgcrypto`, `pg_trgm`; enums `app_role`,
+  `priority_level`, `record_status`, `shift_status`, `notification_type`,
+  `activity_action`; functions `set_updated_at()`, `log_activity()`.
+- **Migration 002 (profiles portion) complete**: table `public.profiles`, 3 indexes,
+  trigger `profiles_set_updated_at`, trigger `on_neon_auth_user_created`.
+
+**The two patches Neon required in 002:**
+
+1. `id uuid primary key references auth.users (id)` →
+   `references neon_auth.user (id)`
+2. The signup trigger moved from `auth.users` to `neon_auth.user`, and since Neon
+   Auth keeps the display name in a `name` column rather than
+   `raw_user_meta_data`:
+   ```sql
+   -- was: coalesce(new.raw_user_meta_data ->> 'full_name', split_part(new.email,'@',1))
+   coalesce(new.name, split_part(new.email, '@', 1))
+   ```
+
+**Next: migration 002 remainder** — reference tables (`pipeline_stages`, `channels`,
+`programs`, `promo_goals`, `promo_types`) plus `projects`, `project_members`,
+`project_programs`. These are plain tables and should apply unchanged; read
+`supabase/migrations/20260101000002_core_tables.sql` from line 70 onward.
+
+Then 003, 004, 005, 006, 007 as written. **Skip 008 entirely** — it creates
+`storage.buckets` / `storage.objects`, which do not exist in Neon; attachments move
+to Neon Object Storage (S3) instead.
+
+## Neon migration — research COMPLETE
 
 User said "go". Findings so far (verified empirically, not assumed):
 
