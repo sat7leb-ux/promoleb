@@ -50,54 +50,69 @@ Token `sbp_fcd2...` sees 0 orgs, cannot create projects. Account at 2-project li
   An earlier assumption that they would was wrong.
 - `.env.local` holds 10 Neon vars, verified git-ignored
 
-## Neon migration — IN PROGRESS (do not restart from scratch)
+## Neon migration — DATABASE COMPLETE ✅ / APP NOT MIGRATED
 
-**Applied to Neon so far (verified live):**
+**The Neon schema is fully built and verified live:**
 
-- Probe table `public.api_probe` — created during testing, **dropped**.
-- **001 DONE**: extensions `pgcrypto`, `pg_trgm`; enums `app_role`,
-  `priority_level`, `record_status`, `shift_status`, `notification_type`,
-  `activity_action`; functions `set_updated_at()`, `log_activity()`.
-- **002 DONE**: `profiles`, `pipeline_stages`, `channels`, `programs`,
-  `promo_goals`, `promo_types`, `projects`, `project_members`, `project_programs`.
-- **003 DONE**: `promo_requests`, `request_participants`, `request_shifts`,
-  `request_notes`, `attachments`, `activity_logs`, `notifications`.
+| | |
+|---|---|
+| Tables | 18 |
+| Indexes | 71 |
+| Triggers | 20 |
+| RLS policies | 41 |
+| Functions | 17 (all) |
+| Seed | 14 channels, 9 stages, 11 goals, 8 promo types, 3 settings |
 
-**Verified current state: 16 tables, 69 indexes, 10 triggers.** Confirmed table list:
-activity_logs, attachments, channels, notifications, pipeline_stages, profiles,
-programs, project_members, project_programs, projects, promo_goals,
-promo_requests, promo_types, request_notes, request_participants, request_shifts.
+**Use `scripts/migrate.mjs` — do not apply SQL by hand again.**
 
-**The two patches Neon required in 002:**
+```powershell
+node scripts/migrate.mjs --status   # what is applied / pending / skipped
+node scripts/migrate.mjs           # apply pending
+```
 
-1. `id uuid primary key references auth.users (id)` →
-   `references neon_auth.user (id)`
-2. The signup trigger moved from `auth.users` to `neon_auth.user`, and since Neon
-   Auth keeps the display name in a `name` column rather than
-   `raw_user_meta_data`:
-   ```sql
-   -- was: coalesce(new.raw_user_meta_data ->> 'full_name', split_part(new.email,'@',1))
-   coalesce(new.name, split_part(new.email, '@', 1))
-   ```
+It reads the numbered files from `supabase/migrations` and executes them against
+`DATABASE_URL` (loaded from `.env.local`), tracks applied files in
+`public._migrations`, and reports each statement so a failure names itself.
+**The point is that the SQL never passes through an agent's context** — that is
+how 004–007 applied clean on the first attempt.
 
-001, 002 and 003 applied with NO other changes — everything else was portable as
-written. 004 has 3 `auth.uid()` references, which work unchanged since Neon
-provides a real `auth.uid()`.
+008 is skipped in code. 002 is hand-patched from its original first application
+and recorded via `scripts/record-applied.mjs`; do not re-run it.
 
-**Remaining — in order:**
+**The only patches Neon ever needed** (both in 002):
 
-1. **004** functions & triggers (apply as-is) — read
-   `supabase/migrations/20260101000004_functions_and_triggers.sql`
-2. **005** RLS policies (apply as-is — `auth.uid()`, `is_admin()`, `can_manage()`
-   are all available; confirm those helper functions come from 004)
-3. **006** reference-data seed (apply as-is)
-4. **007** settings table + admin helpers (apply as-is)
-5. **Skip 008 entirely** — it creates `storage.buckets` / `storage.objects`, which
-   do not exist in Neon. Attachments move to Neon Object Storage (S3) instead;
-   `public.attachments` already exists and just stores `storage_path`.
-6. Then the app-side work: swap client to `@neondatabase/neon-js`, fix
-   `changePasswordAction` (updateUser rejects password), resolve the
-   `@supabase/ssr` question, move uploads to S3, repoint Vercel, redeploy.
+```sql
+-- identity table
+- id uuid primary key references auth.users (id)
++ id uuid primary key references neon_auth.user (id)
+
+-- signup trigger: Neon Auth keeps the display name in `name`
+- coalesce(new.raw_user_meta_data ->> 'full_name', split_part(new.email,'@',1))
++ coalesce(new.name, split_part(new.email, '@', 1))
+```
+
+004–007 needed **no changes at all**.
+
+## REMAINING WORK — the app side (nothing here is started)
+
+1. Swap the client to `@neondatabase/neon-js` with `SupabaseAuthAdapter()`.
+   Touches `src/lib/supabase/{client,server,middleware}.ts`. Reference guide:
+   https://neon.com/docs/auth/migrate/from-supabase.md
+2. **Resolve the `@supabase/ssr` question — the main risk.** It does cookie-based
+   session refresh in `src/middleware.ts` and `src/lib/supabase/middleware.ts`.
+   Prove Neon works here before touching the other 23 files.
+3. Fix `changePasswordAction` in `src/lib/auth/actions.ts` — Neon Auth's
+   `updateUser()` rejects `password` and `email`.
+4. Move attachments to Neon Object Storage. `src/lib/actions/attachments.ts` uses
+   `supabase.storage.*`; S3 credentials (`AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_ENDPOINT_URL_S3`) are already in
+   `.env.local`. `public.attachments` is already correct — it only stores
+   `storage_path`.
+5. Vercel: replace `NEXT_PUBLIC_SUPABASE_*` with the Neon base URL, redeploy,
+   verify sign-in end to end.
+6. Create the admin user (`eliekhachane@sat7.org`) and promote to administrator.
+7. Update `.env.example`, README, `docs/SUPABASE_SETUP.md`, `docs/DEPLOYMENT.md`.
+8. Commit and push.
 
 ## Neon migration — research COMPLETE
 
